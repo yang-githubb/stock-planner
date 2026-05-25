@@ -1,168 +1,155 @@
-# Stock Research Platform
+# StockPlanner
 
-A modern stock research platform built with:
+A modern stock research and portfolio tracking platform.
 
-Frontend:
-- React + Vite + TypeScript
-- TailwindCSS
-- TanStack Query
-- Zustand
+## Features
 
-Backend:
+- **Stock Search** — Search by symbol or company name with live dropdown results (Finnhub API)
+- **Stock Detail** — Real-time quotes, company profiles, interactive candlestick/line charts, and news
+- **Watchlists** — Create multiple watchlists, add/remove stocks, attach notes to items
+- **Portfolio Tracking** — Record buy/sell transactions, track holdings with live P&L (realized & unrealized)
+- **Dashboard** — Trending stocks, watchlist overview, and market news feed
+- **Dark Mode** — System-based dark mode support
+
+## Tech Stack
+
+**Frontend:**
+- React 19, TypeScript, Vite
+- TailwindCSS (dark mode)
+- TanStack Query v5 (data fetching with caching & retry)
+- lightweight-charts (TradingView charting)
+
+**Backend:**
 - FastAPI (async)
-- PostgreSQL (cloud/local)
-- SQLAlchemy + Alembic
+- SQLAlchemy + Alembic (async, SQLite for dev / PostgreSQL for prod)
+- Pydantic v2 + pydantic-settings
+- In-memory TTL cache for Finnhub rate limiting
 
----
+## Project Structure
 
-# 🚀 Project Structure
 ```
-stock-platform/
+stock-planner/
 ├── backend/
 │   ├── app/
-│   ├── alembic/
+│   │   ├── api/          # Route handlers (stocks, watchlists, portfolios)
+│   │   ├── core/         # Config, database, cache
+│   │   ├── models/       # SQLAlchemy ORM models
+│   │   ├── schemas/      # Pydantic request/response schemas
+│   │   └── services/     # Business logic (finnhub, watchlist, portfolio)
+│   ├── alembic/          # Database migrations
 │   └── requirements.txt
 │
 ├── frontend/
 │   ├── src/
+│   │   ├── api/          # Axios API client functions
+│   │   ├── app/          # Router, providers
+│   │   ├── components/   # UI primitives, layout, stock components
+│   │   ├── hooks/        # TanStack Query hooks
+│   │   ├── pages/        # Page components
+│   │   └── types/        # TypeScript interfaces
 │   └── package.json
+│
+├── .env.example
+└── .gitignore
 ```
 
----
+## Setup
 
-# 🧠 Setup Overview
+### Prerequisites
 
-You need to setup BOTH:
+- Python 3.11+
+- Node.js 18+
+- A free [Finnhub API key](https://finnhub.io/)
 
-1. Backend (FastAPI)
-2. Frontend (React)
+### Backend
 
----
-
-# ⚙️ BACKEND SETUP
-
-## ✅ 1. Go to backend
-
-```
+```bash
 cd backend
-```
-
-2. Create virtual environment
-```
 python -m venv venv
-```
-
-Activate:
-```
-venv\Scripts\activate
-```
-
-✅ 3. Install dependencies
-```
+venv\Scripts\activate        # Windows
+# source venv/bin/activate   # macOS/Linux
 pip install -r requirements.txt
 ```
 
-✅ 4. Create .env file
-```
-backend/.env
-```
+Create a `.env` file in the `backend/` folder (see `.env.example` at root):
 
-Example:
 ```
-DATABASE_URL=postgresql+asyncpg://USER:PASSWORD@HOST:PORT \DATABASE
-
-FINNHUB_API_KEY=your_api_key
+FINNHUB_API_KEY=your_api_key_here
 ```
 
-✅ 5. Run migrations
-```alembic upgrade head```
+Run migrations and start the server:
 
-✅ 6. Start backend server
-```uvicorn app.main:app --reload```
-
-✅ 7. Test backend
-Open: ```http://localhost:8000```
-
---- 
-## 🎨 FRONTEND SETUP
-✅ 1. Go to frontend
-```cd frontend```
-
-✅ 2. Install dependencies
-```npm install```
-
-✅ 3. Start frontend
-```npm run dev```
-
-✅ 4. Open app
-```http://localhost:5173```
-
-
-## 🔁 DAILY WORKFLOW
-✅ Pull latest code
-```git pull```
-
-✅ Start project
-Backend
-```
-cd backendvenv\Scripts\activate
-
+```bash
+alembic upgrade head
 uvicorn app.main:app --reload
 ```
 
-Frontend
-```cd frontendnpm run dev```
+Backend runs at `http://localhost:8000`
 
+### Frontend
 
-## 🧱 DATABASE NOTES
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-Uses PostgreSQL (recommended: Supabase / Neon)
-Schema changes must go through Alembic
+Frontend runs at `http://localhost:5173` (proxies `/api` to backend)
 
+## API Endpoints
 
-### ✅ Create migration
-```alembic revision --autogenerate -m "message"```
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/stocks/trending` | Configured trending symbols |
+| GET | `/api/stocks/search?q=` | Search symbols |
+| GET | `/api/stocks/market/news` | Market news |
+| GET | `/api/stocks/{symbol}/quote` | Real-time quote |
+| GET | `/api/stocks/{symbol}/profile` | Company profile |
+| GET | `/api/stocks/{symbol}/candles` | OHLCV chart data |
+| GET | `/api/stocks/{symbol}/news` | Company news |
+| GET | `/api/watchlists/` | List watchlists |
+| POST | `/api/watchlists/` | Create watchlist |
+| DELETE | `/api/watchlists/{id}` | Delete watchlist |
+| POST | `/api/watchlists/{id}/items` | Add symbol to watchlist |
+| PATCH | `/api/watchlists/{id}/items/{item_id}` | Update item notes |
+| DELETE | `/api/watchlists/{id}/items/{item_id}` | Remove from watchlist |
+| GET | `/api/portfolios/` | List portfolios |
+| POST | `/api/portfolios/` | Create portfolio |
+| GET | `/api/portfolios/{id}/summary` | Portfolio with live P&L |
+| DELETE | `/api/portfolios/{id}` | Delete portfolio |
+| POST | `/api/portfolios/{id}/transactions` | Record buy/sell |
+| DELETE | `/api/portfolios/{id}/transactions/{tx_id}` | Delete transaction |
 
-### ✅ Apply migration
-```alembic upgrade head```
+## Configuration
 
-## ❗ Common Issues
+All settings are in `backend/.env` (see `.env.example`):
 
-### 1. JSX errors
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `FINNHUB_API_KEY` | (required) | Finnhub API key |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./stock_platform.db` | Database connection |
+| `CORS_ORIGINS` | `http://localhost:5173` | Allowed CORS origins |
+| `TRENDING_SYMBOLS` | `AAPL,MSFT,GOOGL,AMZN,NVDA,TSLA` | Dashboard trending list |
 
-- Ensure file is .tsx
-- Ensure "jsx": "react-jsx" in tsconfig
+## Database Migrations
 
+```bash
+# Create a new migration after model changes
+alembic revision --autogenerate -m "description"
 
-### 2. CSS import errors
+# Apply migrations
+alembic upgrade head
+```
 
-- Ensure file exists: ```src/vite-env.d.ts```
-- Contains:
-```/// <reference types="vite/client" />declare module "*.css";```
+## Development
 
-### 3. Absolute imports not working
+```bash
+# Start both servers:
+# Terminal 1 - Backend
+cd backend && venv\Scripts\activate && uvicorn app.main:app --reload
 
-- Check tsconfig.json
-- Restart dev server
+# Terminal 2 - Frontend
+cd frontend && npm run dev
+```
 
-### 4. Backend DB not connecting
-
-- Check .env
-- Check database URL
-- Test /db-test
-
-
-### 5. Alembic not detecting models
-
-Ensure models are imported in: ```app/models/__init__.py```
-
-
-## 🧭 DEVELOPMENT PRINCIPLES
-
-Clean architecture (routes → services → data_access)
-No business logic in routes
-Use async everywhere
-Use TanStack Query for API calls
-Zustand only for client state
-Feature-based frontend structure
-Never hardcode configs
+The Vite dev server proxies `/api` requests to the backend automatically.
