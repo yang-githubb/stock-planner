@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, time as dt_time
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,19 +11,23 @@ from app.models.portfolio import Portfolio, Transaction, TransactionType
 from app.services import finnhub_service
 
 
-async def list_portfolios(db: AsyncSession) -> list[Portfolio]:
-    result = await db.execute(
-        select(Portfolio).options(selectinload(Portfolio.transactions))
-    )
+async def list_portfolios(db: AsyncSession, user_id: str | None = None) -> list[Portfolio]:
+    q = select(Portfolio).options(selectinload(Portfolio.transactions))
+    if user_id:
+        q = q.where(or_(Portfolio.user_id == user_id, Portfolio.user_id.is_(None)))
+    result = await db.execute(q)
     return list(result.scalars().all())
 
 
-async def get_portfolio(db: AsyncSession, portfolio_id: int) -> Portfolio:
-    result = await db.execute(
+async def get_portfolio(db: AsyncSession, portfolio_id: int, user_id: str | None = None) -> Portfolio:
+    q = (
         select(Portfolio)
         .options(selectinload(Portfolio.transactions))
         .where(Portfolio.id == portfolio_id)
     )
+    if user_id:
+        q = q.where(or_(Portfolio.user_id == user_id, Portfolio.user_id.is_(None)))
+    result = await db.execute(q)
     portfolio = result.scalar_one_or_none()
     if not portfolio:
         raise HTTPException(status_code=404, detail="Portfolio not found")
@@ -31,17 +35,17 @@ async def get_portfolio(db: AsyncSession, portfolio_id: int) -> Portfolio:
 
 
 async def create_portfolio(
-    db: AsyncSession, name: str, description: str | None = None
+    db: AsyncSession, name: str, description: str | None = None, user_id: str | None = None
 ) -> Portfolio:
-    portfolio = Portfolio(name=name, description=description)
+    portfolio = Portfolio(name=name, description=description, user_id=user_id)
     db.add(portfolio)
     await db.commit()
     await db.refresh(portfolio, ["transactions"])
     return portfolio
 
 
-async def delete_portfolio(db: AsyncSession, portfolio_id: int) -> None:
-    portfolio = await get_portfolio(db, portfolio_id)
+async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: str | None = None) -> None:
+    portfolio = await get_portfolio(db, portfolio_id, user_id)
     await db.delete(portfolio)
     await db.commit()
 
@@ -55,10 +59,12 @@ async def add_transaction(
     price_per_share: float,
     date,
     notes: str | None = None,
+    user_id: str | None = None,
 ) -> Transaction:
-    exists = await db.execute(
-        select(Portfolio.id).where(Portfolio.id == portfolio_id)
-    )
+    q = select(Portfolio.id).where(Portfolio.id == portfolio_id)
+    if user_id:
+        q = q.where(or_(Portfolio.user_id == user_id, Portfolio.user_id.is_(None)))
+    exists = await db.execute(q)
     if exists.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Portfolio not found")
 
@@ -99,14 +105,22 @@ async def add_transaction(
 
 
 async def delete_transaction(
-    db: AsyncSession, portfolio_id: int, transaction_id: int
+    db: AsyncSession,
+    portfolio_id: int,
+    transaction_id: int,
+    user_id: str | None = None,
 ) -> None:
-    result = await db.execute(
-        select(Transaction).where(
+    q = (
+        select(Transaction)
+        .join(Portfolio, Portfolio.id == Transaction.portfolio_id)
+        .where(
             Transaction.id == transaction_id,
             Transaction.portfolio_id == portfolio_id,
         )
     )
+    if user_id:
+        q = q.where(or_(Portfolio.user_id == user_id, Portfolio.user_id.is_(None)))
+    result = await db.execute(q)
     transaction = result.scalar_one_or_none()
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
@@ -165,10 +179,10 @@ def _price_on_day(series: dict[date, float], day: date) -> float | None:
 
 
 async def get_portfolio_performance(
-    db: AsyncSession, portfolio_id: int, days: int = 365
+    db: AsyncSession, portfolio_id: int, days: int = 365, user_id: str | None = None
 ) -> dict:
     """Reconstruct daily portfolio value from transactions + historical closes."""
-    portfolio = await get_portfolio(db, portfolio_id)
+    portfolio = await get_portfolio(db, portfolio_id, user_id)
     txns = sorted(portfolio.transactions, key=lambda t: t.date)
     if not txns:
         return {"points": []}
@@ -221,9 +235,13 @@ async def get_portfolio_performance(
 
 
 async def get_portfolio_summary(
-    db: AsyncSession, portfolio_id: int, *, live_prices: bool = False
+    db: AsyncSession,
+    portfolio_id: int,
+    *,
+    live_prices: bool = False,
+    user_id: str | None = None,
 ) -> dict:
-    portfolio = await get_portfolio(db, portfolio_id)
+    portfolio = await get_portfolio(db, portfolio_id, user_id)
     all_holdings = _compute_holdings(portfolio.transactions)
 
     active_symbols = [

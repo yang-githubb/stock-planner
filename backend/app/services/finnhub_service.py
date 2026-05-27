@@ -247,3 +247,49 @@ async def get_stock_candles(
 
     cache.set(key, candles, CANDLE_TTL)
     return candles
+
+
+async def get_insider_transactions(symbol: str, from_date: str, to_date: str) -> list[dict]:
+    _check_api_key()
+    key = f"insiders:{symbol.upper()}:{from_date}:{to_date}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{FINNHUB_BASE}/stock/insider-transactions",
+            params=_params(symbol=symbol.upper(), **{"from": from_date, "to": to_date}),
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    result = data.get("data", []) if isinstance(data, dict) else []
+    cache.set(key, result, NEWS_TTL)
+    return result
+
+
+async def get_institutional_ownership(
+    symbol: str, from_date: str, to_date: str
+) -> list[dict]:
+    _check_api_key()
+    key = f"ownership:{symbol.upper()}:{from_date}:{to_date}"
+    cached = cache.get(key)
+    if cached is not None:
+        return cached
+
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
+            f"{FINNHUB_BASE}/institutional/ownership",
+            params=_params(
+                symbol=symbol.upper(),
+                cusip="",
+                **{"from": from_date, "to": to_date},
+            ),
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+    result = data.get("data", []) if isinstance(data, dict) else []
+    cache.set(key, result, 3600)
+    return result

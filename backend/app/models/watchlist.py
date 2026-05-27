@@ -7,6 +7,7 @@ class Watchlist(Base):
     __tablename__ = "watchlists"
 
     id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, nullable=True, index=True)
     name = Column(String, nullable=False)
     created_at = Column(DateTime, server_default=func.now())
 

@@ -19,6 +19,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 import { QuoteDetail } from "@/components/stocks/QuoteDetail";
 import { StockChart } from "@/components/stocks/StockChart";
 import { NewsCard } from "@/components/stocks/NewsCard";
+import { InsiderActivity } from "@/components/insiders/InsiderActivity";
 import { useQuote, useCompanyProfile, useStockNews } from "@/hooks/useStocks";
 import { useWatchlists, useAddToWatchlist, useCreateWatchlist } from "@/hooks/useWatchlists";
 
@@ -223,6 +224,8 @@ export default function StockDetailPage() {
           </Card>
         )}
       </div>
+
+      <InsiderActivity symbol={upperSymbol} />
 
       {news && news.length > 0 && (
         <Card>

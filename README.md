@@ -12,6 +12,10 @@ A modern stock research and portfolio tracking platform.
 - **Portfolio Tracking** — Record buy/sell transactions, track holdings with live P&L (realized & unrealized)
 - **Portfolio Value Chart** — Historical portfolio market value vs cost basis over time
 - **Portfolio Allocation** — Donut chart showing each holding's share of the total portfolio market value
+- **Stock Expert Chat (Phase 5)** — Floating chat drawer backed by OpenAI tool-calling (quotes, news, portfolio)
+- **Insider & Ownership (Phase 5)** — Insider filings on stock detail; watchlist insider feed when signed in
+- **Supabase Auth (Phase 5)** — Email/password sign-in; per-user watchlists and portfolios
+- **Realtime notifications (Phase 5)** — WebSocket toasts when background insider ingestion completes
 - **Dashboard** — Trending stocks, watchlist overview, and market news feed
 - **Dark Mode** — System-based dark mode support
 
@@ -135,11 +139,14 @@ Verify database connectivity: `GET http://localhost:8000/api/health` should retu
 
 ```bash
 cd frontend
+cp .env.example .env   # add Supabase URL + anon key
 npm install
 npm run dev
 ```
 
-Frontend runs at `http://localhost:5173` (proxies `/api` to backend)
+Frontend runs at `http://localhost:5173` (proxies `/api` and `/ws` to backend)
+
+**Supabase Auth (frontend):** In Supabase Dashboard → Authentication → enable Email provider. Use the same project as `backend/.env` (`aspwciimhgmrfsyoedbf` if unchanged). Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in `frontend/.env`.
 
 ## API Endpoints
 
@@ -167,6 +174,12 @@ Frontend runs at `http://localhost:5173` (proxies `/api` to backend)
 | DELETE | `/api/portfolios/{id}` | Delete portfolio |
 | POST | `/api/portfolios/{id}/transactions` | Record buy/sell |
 | DELETE | `/api/portfolios/{id}/transactions/{tx_id}` | Delete transaction |
+| POST | `/api/chat/` | Stock expert chat (OpenAI tool-calling) |
+| POST | `/api/insiders/{symbol}/ingest` | Ingest insider + ownership rows for a symbol |
+| GET | `/api/insiders/{symbol}/transactions` | Insider transactions for symbol |
+| GET | `/api/insiders/{symbol}/ownership` | Institutional ownership snapshots |
+| GET | `/api/insiders/feed/me` | Authenticated insider feed for user's watchlist |
+| WS | `/ws/notifications?token=` | Realtime websocket notifications |
 
 ## Configuration
 
@@ -175,9 +188,15 @@ All settings are in `backend/.env` (see `.env.example`):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `FINNHUB_API_KEY` | (required) | Finnhub API key |
+| `OPENAI_API_KEY` | (optional) | Enables `/api/chat` responses via OpenAI |
+| `OPENAI_MODEL` | `gpt-4.1-mini` | OpenAI chat model for stock assistant |
 | `DATABASE_URL` | `sqlite+aiosqlite:///./stock_platform.db` | Postgres (Supabase) connection string; set in `backend/.env` |
+| `SUPABASE_JWKS_URL` | (optional) | Supabase JWKS endpoint for JWT verification |
+| `SUPABASE_JWT_ISSUER` | (optional) | Supabase JWT issuer URL |
 | `CORS_ORIGINS` | `http://localhost:5173` | Allowed CORS origins |
 | `TRENDING_SYMBOLS` | `AAPL,MSFT,GOOGL,AMZN,NVDA,TSLA` | Dashboard trending list |
+| `JOBS_ENABLED` | `true` | Enable scheduler-driven ingestion jobs |
+| `INSIDER_INGEST_INTERVAL_MINUTES` | `30` | Interval for watchlist insider ingestion job |
 
 ## Database Migrations
 

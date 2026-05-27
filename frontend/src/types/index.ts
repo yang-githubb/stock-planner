@@ -112,3 +112,33 @@ export interface PerformancePoint {
 export interface PortfolioPerformance {
   points: PerformancePoint[];
 }
+
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
+export interface InsiderTransaction {
+  symbol: string;
+  filing_date: string | null;
+  transaction_date: string | null;
+  name: string | null;
+  share: number | null;
+  change: number | null;
+  transaction_code: string | null;
+  transaction_price: number | null;
+}
+
+export interface OwnershipSnapshot {
+  symbol: string;
+  report_date: string | null;
+  investor_name: string;
+  share: number | null;
+  change: number | null;
+  filing_date: string | null;
+}
+
+export interface RealtimeEvent {
+  event: string;
+  payload: Record<string, unknown>;
+}
