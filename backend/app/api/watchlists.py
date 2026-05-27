@@ -6,6 +6,7 @@ from app.schemas.watchlist import (
     WatchlistCreate,
     WatchlistItemCreate,
     WatchlistItemUpdate,
+    WatchlistItemResponse,
     WatchlistResponse,
 )
 from app.services import watchlist_service
@@ -34,7 +35,7 @@ async def delete_watchlist(
 
 @router.post(
     "/{watchlist_id}/items",
-    response_model=WatchlistResponse,
+    response_model=WatchlistItemResponse,
     status_code=201,
 )
 async def add_item(

@@ -1,18 +1,19 @@
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
-from app.core.database import engine, Base
+from app.core.database import get_db
 from app.models import Watchlist, WatchlistItem, Portfolio, Transaction  # noqa: F401 – registers models
 from app.api import stocks, watchlists, portfolios
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Schema is managed by Alembic only (alembic upgrade head)
     yield
 
 
@@ -37,5 +38,6 @@ async def root():
 
 
 @app.get("/api/health")
-async def health():
-    return {"status": "healthy"}
+async def health(db: AsyncSession = Depends(get_db)):
+    await db.execute(text("SELECT 1"))
+    return {"status": "healthy", "database": "connected"}

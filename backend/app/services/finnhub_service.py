@@ -1,3 +1,5 @@
+import asyncio
+
 import httpx
 from app.core.config import settings
 from app.core.cache import cache
@@ -78,6 +80,38 @@ async def get_quote(symbol: str) -> dict:
     }
     cache.set(key, result, QUOTE_TTL)
     return result
+
+
+def get_cached_quote(symbol: str) -> dict | None:
+    """Return a cached quote only — never calls Finnhub."""
+    return cache.get(f"quote:{symbol.upper()}")
+
+
+def get_quotes_cached_only(symbols: list[str]) -> dict[str, dict]:
+    """Read quotes from in-memory cache only (15s TTL). Misses are omitted."""
+    unique = list(dict.fromkeys(s.upper() for s in symbols if s.strip()))
+    result: dict[str, dict] = {}
+    for sym in unique:
+        quote = get_cached_quote(sym)
+        if quote is not None:
+            result[sym] = quote
+    return result
+
+
+async def get_quotes(symbols: list[str]) -> dict[str, dict]:
+    """Fetch multiple quotes in parallel (cache hits are instant)."""
+    unique = list(dict.fromkeys(s.upper() for s in symbols if s.strip()))
+    if not unique:
+        return {}
+
+    async def fetch_one(sym: str) -> tuple[str, dict | None]:
+        try:
+            return sym, await get_quote(sym)
+        except Exception:
+            return sym, None
+
+    pairs = await asyncio.gather(*(fetch_one(sym) for sym in unique))
+    return {sym: quote for sym, quote in pairs if quote is not None}
 
 
 async def get_company_profile(symbol: str) -> dict:

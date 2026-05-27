@@ -28,7 +28,14 @@ class Transaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     portfolio_id = Column(Integer, ForeignKey("portfolios.id"), nullable=False)
     symbol = Column(String, nullable=False)
-    type = Column(Enum(TransactionType), nullable=False)
+    type = Column(
+        Enum(
+            TransactionType,
+            name="transactiontype",
+            values_callable=lambda e: [m.value for m in e],
+        ),
+        nullable=False,
+    )
     shares = Column(Float, nullable=False)
     price_per_share = Column(Float, nullable=False)
     date = Column(DateTime, nullable=False)

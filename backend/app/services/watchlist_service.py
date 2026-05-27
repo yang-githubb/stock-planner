@@ -34,18 +34,20 @@ async def delete_watchlist(db: AsyncSession, watchlist_id: int) -> None:
 
 async def add_item(
     db: AsyncSession, watchlist_id: int, symbol: str, notes: str | None = None
-) -> Watchlist:
+) -> WatchlistItem:
     result = await db.execute(
-        select(Watchlist)
-        .options(selectinload(Watchlist.items))
-        .where(Watchlist.id == watchlist_id)
+        select(Watchlist.id).where(Watchlist.id == watchlist_id)
     )
-    watchlist = result.scalar_one_or_none()
-    if not watchlist:
+    if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Watchlist not found")
 
-    existing = [item.symbol for item in watchlist.items]
-    if symbol.upper() in existing:
+    dup = await db.execute(
+        select(WatchlistItem.id).where(
+            WatchlistItem.watchlist_id == watchlist_id,
+            WatchlistItem.symbol == symbol.upper(),
+        )
+    )
+    if dup.scalar_one_or_none() is not None:
         raise HTTPException(
             status_code=409, detail="Symbol already in watchlist"
         )
@@ -57,8 +59,8 @@ async def add_item(
     )
     db.add(item)
     await db.commit()
-    await db.refresh(watchlist, ["items"])
-    return watchlist
+    await db.refresh(item)
+    return item
 
 
 async def remove_item(

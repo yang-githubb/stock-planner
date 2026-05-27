@@ -1,6 +1,6 @@
 import logging
 from datetime import datetime, timedelta
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from app.core.config import settings
 from app.services import finnhub_service
 from app.services.finnhub_service import SymbolNotFound
@@ -13,6 +13,22 @@ router = APIRouter(prefix="/api/stocks", tags=["stocks"])
 @router.get("/trending")
 async def get_trending():
     return {"symbols": settings.TRENDING_SYMBOLS}
+
+
+@router.get("/quotes")
+async def get_stock_quotes(symbols: str = Query(..., description="Comma-separated symbols")):
+    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
+    if not symbol_list:
+        return {"quotes": {}}
+    if len(symbol_list) > 30:
+        raise HTTPException(status_code=400, detail="Maximum 30 symbols per request")
+    try:
+        quotes = await finnhub_service.get_quotes(symbol_list)
+        return {"quotes": quotes}
+    except ValueError as e:
+        raise HTTPException(status_code=503, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Finnhub API error: {e}")
 
 
 @router.get("/search")

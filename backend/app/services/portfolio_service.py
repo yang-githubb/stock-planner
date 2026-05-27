@@ -1,4 +1,7 @@
+import asyncio
 from collections import defaultdict
+from datetime import date, datetime, timedelta, time as dt_time
+
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -52,8 +55,12 @@ async def add_transaction(
     price_per_share: float,
     date,
     notes: str | None = None,
-) -> Portfolio:
-    portfolio = await get_portfolio(db, portfolio_id)
+) -> Transaction:
+    exists = await db.execute(
+        select(Portfolio.id).where(Portfolio.id == portfolio_id)
+    )
+    if exists.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Portfolio not found")
 
     if tx_type not in ("buy", "sell"):
         raise HTTPException(status_code=400, detail="Type must be 'buy' or 'sell'")
@@ -65,7 +72,10 @@ async def add_transaction(
         raise HTTPException(status_code=400, detail="Price must be non-negative")
 
     if tx_type == "sell":
-        holdings = _compute_holdings(portfolio.transactions)
+        result = await db.execute(
+            select(Transaction).where(Transaction.portfolio_id == portfolio_id)
+        )
+        holdings = _compute_holdings(list(result.scalars().all()))
         current_shares = holdings.get(symbol.upper(), {}).get("shares", 0)
         if shares > current_shares:
             raise HTTPException(
@@ -84,8 +94,8 @@ async def add_transaction(
     )
     db.add(transaction)
     await db.commit()
-    await db.refresh(portfolio, ["transactions"])
-    return portfolio
+    await db.refresh(transaction)
+    return transaction
 
 
 async def delete_transaction(
@@ -127,15 +137,110 @@ def _compute_holdings(transactions: list[Transaction]) -> dict:
     return {k: v for k, v in holdings.items() if v["shares"] > 0.001 or abs(v["realized_pnl"]) > 0.001}
 
 
-async def get_portfolio_summary(db: AsyncSession, portfolio_id: int) -> dict:
+def _tx_date(tx: Transaction) -> date:
+    d = tx.date
+    return d.date() if isinstance(d, datetime) else d
+
+
+def _candles_to_price_map(candles: list[dict]) -> dict[date, float]:
+    series: dict[date, float] = {}
+    for c in candles:
+        day = datetime.utcfromtimestamp(c["time"]).date()
+        series[day] = c["close"]
+    return series
+
+
+def _price_on_day(series: dict[date, float], day: date) -> float | None:
+    if not series:
+        return None
+    probe = day
+    earliest = min(series)
+    for _ in range(10):
+        if probe in series:
+            return series[probe]
+        if probe < earliest:
+            return None
+        probe -= timedelta(days=1)
+    return series.get(earliest)
+
+
+async def get_portfolio_performance(
+    db: AsyncSession, portfolio_id: int, days: int = 365
+) -> dict:
+    """Reconstruct daily portfolio value from transactions + historical closes."""
+    portfolio = await get_portfolio(db, portfolio_id)
+    txns = sorted(portfolio.transactions, key=lambda t: t.date)
+    if not txns:
+        return {"points": []}
+
+    days = max(30, min(days, 1825))
+    end_day = date.today()
+    first_day = _tx_date(txns[0])
+    start_day = max(first_day, end_day - timedelta(days=days))
+
+    symbols = sorted({t.symbol for t in txns})
+    from_ts = int(datetime.combine(start_day, dt_time.min).timestamp())
+    to_ts = int(datetime.combine(end_day, dt_time.max).timestamp())
+
+    async def fetch_prices(sym: str) -> tuple[str, dict[date, float]]:
+        try:
+            candles = await finnhub_service.get_stock_candles(sym, "D", from_ts, to_ts)
+            return sym, _candles_to_price_map(candles)
+        except Exception:
+            return sym, {}
+
+    price_maps = dict(await asyncio.gather(*(fetch_prices(s) for s in symbols)))
+
+    points: list[dict] = []
+    day = start_day
+    while day <= end_day:
+        relevant = [t for t in txns if _tx_date(t) <= day]
+        holdings = _compute_holdings(relevant)
+
+        market_value = 0.0
+        cost_basis = 0.0
+        for sym, data in holdings.items():
+            if data["shares"] < 0.001:
+                continue
+            cost_basis += data["total_cost"]
+            price = _price_on_day(price_maps.get(sym, {}), day)
+            if price is not None:
+                market_value += data["shares"] * price
+
+        if market_value > 0 or cost_basis > 0:
+            points.append(
+                {
+                    "time": int(datetime.combine(day, dt_time.min).timestamp()),
+                    "market_value": round(market_value, 2),
+                    "cost_basis": round(cost_basis, 2),
+                }
+            )
+        day += timedelta(days=1)
+
+    return {"points": points}
+
+
+async def get_portfolio_summary(
+    db: AsyncSession, portfolio_id: int, *, live_prices: bool = False
+) -> dict:
     portfolio = await get_portfolio(db, portfolio_id)
     all_holdings = _compute_holdings(portfolio.transactions)
+
+    active_symbols = [
+        symbol
+        for symbol, data in all_holdings.items()
+        if data["shares"] >= 0.001
+    ]
+    if live_prices:
+        quotes = await finnhub_service.get_quotes(active_symbols)
+    else:
+        quotes = finnhub_service.get_quotes_cached_only(active_symbols)
 
     holdings_list = []
     total_invested = 0.0
     total_market_value = 0.0
     total_realized = 0.0
-    has_prices = True
+    has_prices = bool(active_symbols) and len(quotes) == len(active_symbols)
 
     for symbol, data in all_holdings.items():
         total_realized += data["realized_pnl"]
@@ -151,14 +256,14 @@ async def get_portfolio_summary(db: AsyncSession, portfolio_id: int) -> dict:
         unrealized_pnl = None
         unrealized_pnl_pct = None
 
-        try:
-            quote = await finnhub_service.get_quote(symbol)
+        quote = quotes.get(symbol)
+        if quote:
             current_price = quote["current_price"]
             market_value = current_price * data["shares"]
             unrealized_pnl = market_value - data["total_cost"]
             unrealized_pnl_pct = (unrealized_pnl / data["total_cost"] * 100) if data["total_cost"] > 0 else 0
             total_market_value += market_value
-        except Exception:
+        elif symbol in active_symbols:
             has_prices = False
 
         holdings_list.append({

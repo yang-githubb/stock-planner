@@ -4,9 +4,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.schemas.portfolio import (
     PortfolioCreate,
+    PortfolioPerformanceResponse,
     PortfolioResponse,
     PortfolioSummaryResponse,
     TransactionCreate,
+    TransactionResponse,
 )
 from app.services import portfolio_service
 
@@ -23,11 +25,24 @@ async def get_portfolio(portfolio_id: int, db: AsyncSession = Depends(get_db)):
     return await portfolio_service.get_portfolio(db, portfolio_id)
 
 
+@router.get("/{portfolio_id}/performance", response_model=PortfolioPerformanceResponse)
+async def get_portfolio_performance(
+    portfolio_id: int,
+    days: int = 365,
+    db: AsyncSession = Depends(get_db),
+):
+    return await portfolio_service.get_portfolio_performance(db, portfolio_id, days)
+
+
 @router.get("/{portfolio_id}/summary", response_model=PortfolioSummaryResponse)
 async def get_portfolio_summary(
-    portfolio_id: int, db: AsyncSession = Depends(get_db)
+    portfolio_id: int,
+    live_prices: bool = False,
+    db: AsyncSession = Depends(get_db),
 ):
-    return await portfolio_service.get_portfolio_summary(db, portfolio_id)
+    return await portfolio_service.get_portfolio_summary(
+        db, portfolio_id, live_prices=live_prices
+    )
 
 
 @router.post("/", response_model=PortfolioResponse, status_code=201)
@@ -46,7 +61,7 @@ async def delete_portfolio(
 
 @router.post(
     "/{portfolio_id}/transactions",
-    response_model=PortfolioResponse,
+    response_model=TransactionResponse,
     status_code=201,
 )
 async def add_transaction(
@@ -54,7 +69,7 @@ async def add_transaction(
     data: TransactionCreate,
     db: AsyncSession = Depends(get_db),
 ):
-    return await portfolio_service.add_transaction(
+    tx = await portfolio_service.add_transaction(
         db,
         portfolio_id,
         data.symbol,
@@ -63,6 +78,17 @@ async def add_transaction(
         data.price_per_share,
         data.date,
         data.notes,
+    )
+    return TransactionResponse(
+        id=tx.id,
+        portfolio_id=tx.portfolio_id,
+        symbol=tx.symbol,
+        type=tx.type.value,
+        shares=tx.shares,
+        price_per_share=tx.price_per_share,
+        date=tx.date,
+        notes=tx.notes,
+        created_at=tx.created_at,
     )
 
 

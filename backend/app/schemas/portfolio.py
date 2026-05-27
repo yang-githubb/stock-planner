@@ -1,5 +1,5 @@
 from datetime import datetime
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 
 class TransactionCreate(BaseModel):
@@ -9,6 +9,14 @@ class TransactionCreate(BaseModel):
     price_per_share: float
     date: datetime
     notes: str | None = None
+
+    @field_validator("date")
+    @classmethod
+    def strip_timezone(cls, v: datetime) -> datetime:
+        # DB uses TIMESTAMP WITHOUT TIME ZONE; asyncpg rejects aware datetimes.
+        if v.tzinfo is not None:
+            return v.replace(tzinfo=None)
+        return v
 
 
 class TransactionResponse(BaseModel):
@@ -60,3 +68,13 @@ class PortfolioSummaryResponse(BaseModel):
     total_unrealized_pnl: float | None
     total_realized_pnl: float
     holdings: list[HoldingResponse]
+
+
+class PerformancePoint(BaseModel):
+    time: int
+    market_value: float
+    cost_basis: float
+
+
+class PortfolioPerformanceResponse(BaseModel):
+    points: list[PerformancePoint]
