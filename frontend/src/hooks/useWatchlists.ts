@@ -7,11 +7,13 @@ import {
   updateItemNotes,
   removeFromWatchlist,
 } from "@/api/watchlists";
+import type { Watchlist, WatchlistItem } from "@/types";
 
 export function useWatchlists() {
   return useQuery({
     queryKey: ["watchlists"],
     queryFn: getWatchlists,
+    staleTime: 30_000,
   });
 }
 
@@ -43,7 +45,15 @@ export function useAddToWatchlist() {
       symbol: string;
       notes?: string;
     }) => addToWatchlist(watchlistId, symbol, notes),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchlists"] }),
+    onSuccess: (newItem, { watchlistId }) => {
+      qc.setQueryData<Watchlist[]>(["watchlists"], (old) =>
+        old?.map((wl) =>
+          wl.id === watchlistId
+            ? { ...wl, items: [...wl.items, newItem] }
+            : wl
+        )
+      );
+    },
   });
 }
 
@@ -73,6 +83,14 @@ export function useRemoveFromWatchlist() {
       watchlistId: number;
       itemId: number;
     }) => removeFromWatchlist(watchlistId, itemId),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["watchlists"] }),
+    onSuccess: (_data, { watchlistId, itemId }) => {
+      qc.setQueryData<Watchlist[]>(["watchlists"], (old) =>
+        old?.map((wl) =>
+          wl.id === watchlistId
+            ? { ...wl, items: wl.items.filter((i) => i.id !== itemId) }
+            : wl
+        )
+      );
+    },
   });
 }

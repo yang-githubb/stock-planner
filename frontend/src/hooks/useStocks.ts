@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { searchStocks, getQuote, getCompanyProfile, getStockNews, getMarketNews, getStockCandles, getTrendingSymbols } from "@/api/stocks";
+import { searchStocks, getQuote, getQuotes, getCompanyProfile, getStockNews, getMarketNews, getStockCandles, getTrendingSymbols } from "@/api/stocks";
 
 export function useTrendingSymbols() {
   return useQuery({
@@ -13,17 +13,31 @@ export function useStockSearch(query: string) {
   return useQuery({
     queryKey: ["stockSearch", query],
     queryFn: () => searchStocks(query),
-    enabled: query.length >= 1,
-    staleTime: 30_000,
+    enabled: query.length >= 2,
+    staleTime: 60_000,
   });
 }
 
-export function useQuote(symbol: string) {
+export function useQuote(symbol: string, enabled = true) {
   return useQuery({
     queryKey: ["quote", symbol],
     queryFn: () => getQuote(symbol),
-    enabled: !!symbol,
+    enabled: !!symbol && enabled,
+    staleTime: 15_000,
     refetchInterval: 60_000,
+  });
+}
+
+/** Batch quotes; polls every 15s to match backend Finnhub cache TTL. */
+export function useQuotes(symbols: string[]) {
+  const unique = [...new Set(symbols.map((s) => s.toUpperCase()).filter(Boolean))].sort();
+  return useQuery({
+    queryKey: ["quotes", unique.join(",")],
+    queryFn: () => getQuotes(unique),
+    enabled: unique.length > 0,
+    staleTime: 0,
+    refetchInterval: 15_000,
+    refetchIntervalInBackground: true,
   });
 }
 

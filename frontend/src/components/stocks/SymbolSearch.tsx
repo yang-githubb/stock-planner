@@ -3,6 +3,7 @@ import { Search } from "lucide-react";
 import { Input } from "@/components/ui/Input";
 import { Spinner } from "@/components/ui/Spinner";
 import { useStockSearch } from "@/hooks/useStocks";
+import { useDebounce } from "@/hooks/useDebounce";
 
 interface SymbolSearchProps {
   value: string;
@@ -23,7 +24,8 @@ export function SymbolSearch({
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const { data: results, isLoading } = useStockSearch(query);
+  const debouncedQuery = useDebounce(query, 300);
+  const { data: results, isLoading } = useStockSearch(debouncedQuery);
 
   useEffect(() => {
     setQuery(value);
@@ -56,10 +58,10 @@ export function SymbolSearch({
           setOpen(true);
           if (!e.target.value) onChange("");
         }}
-        onFocus={() => query.length >= 1 && setOpen(true)}
+        onFocus={() => query.length >= 2 && setOpen(true)}
         autoFocus={autoFocus}
       />
-      {open && query.length >= 1 && (
+      {open && debouncedQuery.length >= 2 && (
         <div className="absolute left-0 z-20 mt-1 max-h-60 w-full overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg dark:border-slate-700 dark:bg-slate-800">
           {isLoading ? (
             <div className="flex items-center justify-center py-3">

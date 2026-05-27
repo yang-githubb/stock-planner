@@ -102,3 +102,13 @@ export interface PortfolioSummary {
   total_realized_pnl: number;
   holdings: Holding[];
 }
+
+export interface PerformancePoint {
+  time: number;
+  market_value: number;
+  cost_basis: number;
+}
+
+export interface PortfolioPerformance {
+  points: PerformancePoint[];
+}

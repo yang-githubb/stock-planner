@@ -1,4 +1,4 @@
-import type { Portfolio, PortfolioSummary } from "@/types";
+import type { Portfolio, PortfolioPerformance, PortfolioSummary, Transaction } from "@/types";
 import api from "./client";
 
 export async function getPortfolios(): Promise<Portfolio[]> {
@@ -11,8 +11,24 @@ export async function getPortfolio(id: number): Promise<Portfolio> {
   return data;
 }
 
-export async function getPortfolioSummary(id: number): Promise<PortfolioSummary> {
-  const { data } = await api.get<PortfolioSummary>(`/portfolios/${id}/summary`);
+export async function getPortfolioSummary(
+  id: number,
+  livePrices = false
+): Promise<PortfolioSummary> {
+  const { data } = await api.get<PortfolioSummary>(`/portfolios/${id}/summary`, {
+    params: { live_prices: livePrices },
+  });
+  return data;
+}
+
+export async function getPortfolioPerformance(
+  id: number,
+  days = 365
+): Promise<PortfolioPerformance> {
+  const { data } = await api.get<PortfolioPerformance>(
+    `/portfolios/${id}/performance`,
+    { params: { days } }
+  );
   return data;
 }
 
@@ -38,8 +54,8 @@ export async function addTransaction(
     date: string;
     notes?: string;
   }
-): Promise<Portfolio> {
-  const { data } = await api.post<Portfolio>(
+): Promise<Transaction> {
+  const { data } = await api.post<Transaction>(
     `/portfolios/${portfolioId}/transactions`,
     transaction
   );

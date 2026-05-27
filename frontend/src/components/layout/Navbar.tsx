@@ -1,10 +1,10 @@
 import { NavLink } from "react-router-dom";
-import { TrendingUp, Search, Star, Briefcase } from "lucide-react";
+import { TrendingUp, GitCompareArrows, Star, Briefcase } from "lucide-react";
 import clsx from "clsx";
 
 const links = [
   { to: "/", label: "Dashboard", icon: TrendingUp },
-  { to: "/search", label: "Search", icon: Search },
+  { to: "/compare", label: "Compare", icon: GitCompareArrows },
   { to: "/watchlist", label: "Watchlist", icon: Star },
   { to: "/portfolio", label: "Portfolio", icon: Briefcase },
 ];

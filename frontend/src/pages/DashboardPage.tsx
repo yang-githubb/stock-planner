@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { TrendingUp, Newspaper, Star } from "lucide-react";
 import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
-import { StockCard } from "@/components/stocks/StockCard";
+import { StockCardGrid } from "@/components/stocks/StockCardGrid";
 import { SymbolSearch } from "@/components/stocks/SymbolSearch";
 import { NewsCard } from "@/components/stocks/NewsCard";
 import { PageSpinner } from "@/components/ui/Spinner";
@@ -47,11 +47,7 @@ export default function DashboardPage() {
               Your Watchlist
             </h2>
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {watchlistSymbols.map((symbol) => (
-              <StockCard key={symbol} symbol={symbol} />
-            ))}
-          </div>
+          <StockCardGrid symbols={watchlistSymbols} />
         </section>
       )}
 
@@ -62,11 +58,7 @@ export default function DashboardPage() {
             Trending Stocks
           </h2>
         </div>
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {(trending ?? []).map((symbol) => (
-            <StockCard key={symbol} symbol={symbol} />
-          ))}
-        </div>
+        <StockCardGrid symbols={trending ?? []} />
       </section>
 
       <section>

@@ -3,14 +3,20 @@ import { Card } from "@/components/ui/Card";
 import { PriceChange } from "./PriceChange";
 import { useQuote } from "@/hooks/useStocks";
 import { Spinner } from "@/components/ui/Spinner";
+import type { StockQuote } from "@/types";
 
 interface StockCardProps {
   symbol: string;
   name?: string;
+  /** When provided (e.g. from StockCardGrid), skips per-card fetch */
+  quote?: StockQuote;
+  isLoading?: boolean;
 }
 
-export function StockCard({ symbol, name }: StockCardProps) {
-  const { data: quote, isLoading } = useQuote(symbol);
+export function StockCard({ symbol, name, quote: quoteProp, isLoading: loadingProp }: StockCardProps) {
+  const { data: fetched, isLoading: fetching } = useQuote(symbol, quoteProp === undefined);
+  const quote = quoteProp ?? fetched;
+  const isLoading = loadingProp ?? (quoteProp === undefined && fetching);
 
   return (
     <Link to={`/stock/${symbol}`}>

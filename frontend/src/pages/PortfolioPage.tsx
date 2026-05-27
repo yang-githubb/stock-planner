@@ -15,8 +15,11 @@ import { PageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
 import { PriceChange } from "@/components/stocks/PriceChange";
 import { SymbolSearch } from "@/components/stocks/SymbolSearch";
+import { PortfolioValueChart } from "@/components/portfolio/PortfolioValueChart";
+import { PortfolioAllocation } from "@/components/portfolio/PortfolioAllocation";
 import {
   usePortfolios,
+  usePortfolio,
   usePortfolioSummary,
   useCreatePortfolio,
   useDeletePortfolio,
@@ -39,10 +42,12 @@ function PortfolioDetail({
   initialSymbol?: string;
   initialPrice?: string;
 }) {
-  const { data: summary, isLoading } = usePortfolioSummary(portfolioId);
+  const { data: summary, isLoading, isRefreshingPrices, lastPriceUpdate } =
+    usePortfolioSummary(portfolioId);
   const addTransaction = useAddTransaction();
   const deleteTransaction = useDeleteTransaction();
   const [showForm, setShowForm] = useState(!!initialSymbol);
+  const [savedNotice, setSavedNotice] = useState(false);
   const [form, setForm] = useState({
     symbol: initialSymbol ?? "",
     type: "buy" as "buy" | "sell",
@@ -67,17 +72,18 @@ function PortfolioDetail({
     e.preventDefault();
     if (!form.symbol || !form.shares || !form.price_per_share) return;
 
-    addTransaction.mutate({
-      portfolioId,
-      transaction: {
-        symbol: form.symbol.toUpperCase(),
-        type: form.type,
-        shares: parseFloat(form.shares),
-        price_per_share: parseFloat(form.price_per_share),
-        date: new Date(form.date).toISOString(),
-        notes: form.notes || undefined,
-      },
-    });
+    const transaction = {
+      symbol: form.symbol.toUpperCase(),
+      type: form.type,
+      shares: parseFloat(form.shares),
+      price_per_share: parseFloat(form.price_per_share),
+      date: form.date,
+      notes: form.notes || undefined,
+    };
+
+    setSavedNotice(true);
+    window.setTimeout(() => setSavedNotice(false), 3000);
+    setShowForm(false);
     setForm({
       symbol: "",
       type: "buy",
@@ -86,7 +92,11 @@ function PortfolioDetail({
       date: new Date().toISOString().split("T")[0],
       notes: "",
     });
-    setShowForm(false);
+
+    addTransaction.mutate(
+      { portfolioId, transaction },
+      { onError: () => setSavedNotice(false) }
+    );
   }
 
   if (isLoading) return <PageSpinner />;
@@ -94,7 +104,32 @@ function PortfolioDetail({
 
   return (
     <div className="space-y-4">
-      <SummaryCards summary={summary} />
+      {savedNotice && (
+        <div
+          role="status"
+          className="rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+        >
+          Transaction saved
+          {isRefreshingPrices && (
+            <span className="ml-2 text-emerald-600/80 dark:text-emerald-300/80">
+              · updating prices…
+            </span>
+          )}
+        </div>
+      )}
+      <SummaryCards
+        summary={summary}
+        live={summary.holdings.length > 0}
+        isRefreshingPrices={isRefreshingPrices}
+        lastPriceUpdate={lastPriceUpdate}
+      />
+
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          <PortfolioValueChart portfolioId={portfolioId} />
+        </div>
+        <PortfolioAllocation holdings={summary.holdings} />
+      </div>
 
       <Card>
         <CardHeader>
@@ -147,7 +182,11 @@ function PortfolioDetail({
             </div>
             <div className="flex gap-2">
               <Button type="submit" variant="primary" size="sm" disabled={addTransaction.isPending}>
-                {form.type === "buy" ? "Record Buy" : "Record Sell"}
+                {addTransaction.isPending
+                  ? "Saving…"
+                  : form.type === "buy"
+                    ? "Record Buy"
+                    : "Record Sell"}
               </Button>
               <Button type="button" variant="ghost" size="sm" onClick={() => setShowForm(false)}>
                 Cancel
@@ -228,8 +267,35 @@ function PortfolioDetail({
   );
 }
 
-function SummaryCards({ summary }: { summary: PortfolioSummary }) {
+function SummaryCards({
+  summary,
+  live,
+  isRefreshingPrices,
+  lastPriceUpdate,
+}: {
+  summary: PortfolioSummary;
+  live?: boolean;
+  isRefreshingPrices?: boolean;
+  lastPriceUpdate?: number;
+}) {
   return (
+    <div className="space-y-2">
+      {live && (
+        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+          <span
+            className={`inline-flex h-2 w-2 rounded-full ${
+              isRefreshingPrices ? "animate-pulse bg-amber-400" : "bg-emerald-500"
+            }`}
+            aria-hidden
+          />
+          <span>Live prices · updates every 15s</span>
+          {lastPriceUpdate ? (
+            <span className="text-gray-400">
+              · {new Date(lastPriceUpdate).toLocaleTimeString()}
+            </span>
+          ) : null}
+        </div>
+      )}
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
       <Card>
         <p className="text-sm text-gray-500 dark:text-gray-400">Total Invested</p>
@@ -265,6 +331,7 @@ function SummaryCards({ summary }: { summary: PortfolioSummary }) {
         </p>
       </Card>
     </div>
+    </div>
   );
 }
 
@@ -275,8 +342,7 @@ function TransactionHistory({
   portfolioId: number;
   onDelete: (txId: number) => void;
 }) {
-  const { data: portfolios } = usePortfolios();
-  const portfolio = portfolios?.find((p) => p.id === portfolioId);
+  const { data: portfolio } = usePortfolio(portfolioId);
   const transactions = portfolio?.transactions ?? [];
 
   const sorted = [...transactions].sort(

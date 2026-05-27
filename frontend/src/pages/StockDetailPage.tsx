@@ -82,8 +82,8 @@ export default function StockDetailPage() {
           title={`No data for "${symbol.toUpperCase()}"`}
           description="This stock may not be available on Finnhub's free tier. Only US-listed stocks are supported. Try searching for a US symbol like AAPL or MSFT."
           action={
-            <Link to="/search">
-              <Button>Search Stocks</Button>
+            <Link to="/">
+              <Button>Search on Dashboard</Button>
             </Link>
           }
         />

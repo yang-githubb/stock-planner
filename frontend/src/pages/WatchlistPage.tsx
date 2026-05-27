@@ -4,6 +4,8 @@ import { Card, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { StockCard } from "@/components/stocks/StockCard";
+import { useQuotes } from "@/hooks/useStocks";
+import type { WatchlistItem } from "@/types";
 import { SymbolSearch } from "@/components/stocks/SymbolSearch";
 import { PageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
@@ -15,6 +17,99 @@ import {
   useRemoveFromWatchlist,
   useUpdateItemNotes,
 } from "@/hooks/useWatchlists";
+
+function WatchlistItemRows({
+  watchlistId,
+  items,
+  editingNotes,
+  setEditingNotes,
+  onRemove,
+  onSaveNotes,
+}: {
+  watchlistId: number;
+  items: WatchlistItem[];
+  editingNotes: { itemId: number; watchlistId: number; value: string } | null;
+  setEditingNotes: (v: { itemId: number; watchlistId: number; value: string } | null) => void;
+  onRemove: (watchlistId: number, itemId: number) => void;
+  onSaveNotes: (watchlistId: number, itemId: number, notes: string | null) => void;
+}) {
+  const symbols = items.map((i) => i.symbol);
+  const { data: quotes, isLoading } = useQuotes(symbols);
+
+  return (
+    <div className="space-y-3">
+      {items.map((item) => (
+        <div key={item.id} className="space-y-1">
+          <div className="flex items-center gap-2">
+            <div className="flex-1">
+              <StockCard
+                symbol={item.symbol}
+                quote={quotes?.[item.symbol]}
+                isLoading={isLoading}
+              />
+            </div>
+            <button
+              onClick={() =>
+                setEditingNotes(
+                  editingNotes?.itemId === item.id
+                    ? null
+                    : { itemId: item.id, watchlistId, value: item.notes ?? "" }
+                )
+              }
+              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-500 dark:hover:bg-indigo-900/20"
+              title="Edit notes"
+            >
+              {item.notes ? <MessageSquare size={18} /> : <Pencil size={18} />}
+            </button>
+            <button
+              onClick={() => onRemove(watchlistId, item.id)}
+              className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-900/20"
+              title="Remove from watchlist"
+            >
+              <X size={18} />
+            </button>
+          </div>
+          {item.notes && editingNotes?.itemId !== item.id && (
+            <p className="ml-2 text-xs text-gray-500 dark:text-gray-400 italic">
+              {item.notes}
+            </p>
+          )}
+          {editingNotes?.itemId === item.id && (
+            <div className="ml-2 flex gap-2">
+              <Input
+                placeholder="Add a note..."
+                value={editingNotes.value}
+                onChange={(e) =>
+                  setEditingNotes({ ...editingNotes, value: e.target.value })
+                }
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    onSaveNotes(watchlistId, item.id, editingNotes.value.trim() || null);
+                    setEditingNotes(null);
+                  }
+                  if (e.key === "Escape") setEditingNotes(null);
+                }}
+                className="max-w-sm text-sm"
+                autoFocus
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={() => {
+                  onSaveNotes(watchlistId, item.id, editingNotes.value.trim() || null);
+                  setEditingNotes(null);
+                }}
+              >
+                Save
+              </Button>
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export default function WatchlistPage() {
   const { data: watchlists, isLoading } = useWatchlists();
@@ -117,86 +212,18 @@ export default function WatchlistPage() {
               No stocks in this watchlist yet. Add some above!
             </p>
           ) : (
-            <div className="space-y-3">
-              {wl.items.map((item) => (
-                <div key={item.id} className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <div className="flex-1">
-                      <StockCard symbol={item.symbol} />
-                    </div>
-                    <button
-                      onClick={() =>
-                        setEditingNotes(
-                          editingNotes?.itemId === item.id
-                            ? null
-                            : { itemId: item.id, watchlistId: wl.id, value: item.notes ?? "" }
-                        )
-                      }
-                      className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-indigo-50 hover:text-indigo-500 dark:hover:bg-indigo-900/20"
-                      title="Edit notes"
-                    >
-                      {item.notes ? <MessageSquare size={18} /> : <Pencil size={18} />}
-                    </button>
-                    <button
-                      onClick={() =>
-                        removeFromWatchlist.mutate({
-                          watchlistId: wl.id,
-                          itemId: item.id,
-                        })
-                      }
-                      className="rounded-lg p-2 text-gray-400 transition-colors hover:bg-rose-50 hover:text-rose-500 dark:hover:bg-rose-900/20"
-                      title="Remove from watchlist"
-                    >
-                      <X size={18} />
-                    </button>
-                  </div>
-                  {item.notes && editingNotes?.itemId !== item.id && (
-                    <p className="ml-2 text-xs text-gray-500 dark:text-gray-400 italic">
-                      {item.notes}
-                    </p>
-                  )}
-                  {editingNotes?.itemId === item.id && (
-                    <div className="ml-2 flex gap-2">
-                      <Input
-                        placeholder="Add a note..."
-                        value={editingNotes.value}
-                        onChange={(e) =>
-                          setEditingNotes({ ...editingNotes, value: e.target.value })
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            e.preventDefault();
-                            updateNotes.mutate({
-                              watchlistId: editingNotes.watchlistId,
-                              itemId: editingNotes.itemId,
-                              notes: editingNotes.value.trim() || null,
-                            });
-                            setEditingNotes(null);
-                          }
-                          if (e.key === "Escape") setEditingNotes(null);
-                        }}
-                        className="max-w-sm text-sm"
-                        autoFocus
-                      />
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        onClick={() => {
-                          updateNotes.mutate({
-                            watchlistId: editingNotes.watchlistId,
-                            itemId: editingNotes.itemId,
-                            notes: editingNotes.value.trim() || null,
-                          });
-                          setEditingNotes(null);
-                        }}
-                      >
-                        Save
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-            </div>
+            <WatchlistItemRows
+              watchlistId={wl.id}
+              items={wl.items}
+              editingNotes={editingNotes}
+              setEditingNotes={setEditingNotes}
+              onRemove={(watchlistId, itemId) =>
+                removeFromWatchlist.mutate({ watchlistId, itemId })
+              }
+              onSaveNotes={(watchlistId, itemId, notes) =>
+                updateNotes.mutate({ watchlistId, itemId, notes })
+              }
+            />
           )}
         </Card>
       ))}

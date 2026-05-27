@@ -6,8 +6,12 @@ A modern stock research and portfolio tracking platform.
 
 - **Stock Search** — Search by symbol or company name with live dropdown results (Finnhub API)
 - **Stock Detail** — Real-time quotes, company profiles, interactive candlestick/line charts, and news
+- **Chart Indicators** — Toggle SMA(20), SMA(50), EMA(12), and RSI(14) overlays directly on the price chart
+- **Compare** — Side-by-side normalised % return chart and quote table for up to 4 symbols at once
 - **Watchlists** — Create multiple watchlists, add/remove stocks, attach notes to items
 - **Portfolio Tracking** — Record buy/sell transactions, track holdings with live P&L (realized & unrealized)
+- **Portfolio Value Chart** — Historical portfolio market value vs cost basis over time
+- **Portfolio Allocation** — Donut chart showing each holding's share of the total portfolio market value
 - **Dashboard** — Trending stocks, watchlist overview, and market news feed
 - **Dark Mode** — System-based dark mode support
 
@@ -21,7 +25,7 @@ A modern stock research and portfolio tracking platform.
 
 **Backend:**
 - FastAPI (async)
-- SQLAlchemy + Alembic (async, SQLite for dev / PostgreSQL for prod)
+- SQLAlchemy + Alembic (async PostgreSQL via **Supabase**)
 - Pydantic v2 + pydantic-settings
 - In-memory TTL cache for Finnhub rate limiting
 
@@ -60,6 +64,46 @@ stock-planner/
 - Python 3.11+
 - Node.js 18+
 - A free [Finnhub API key](https://finnhub.io/)
+- A free [Supabase](https://supabase.com) project (PostgreSQL database)
+
+### Quick start (local dev)
+
+1. Clone the repo and create your Python/Node envs:
+   - `cd backend && python -m venv venv && venv\Scripts\activate && pip install -r requirements.txt`
+   - `cd frontend && npm install`
+2. In Supabase, grab a Postgres connection string and set `DATABASE_URL` + `FINNHUB_API_KEY` in `backend/.env` (see `.env.example`).
+3. Apply database migrations:
+   - `cd backend && alembic upgrade head`
+4. Run both servers:
+   - Backend: `cd backend && venv\Scripts\activate && uvicorn app.main:app --reload`
+   - Frontend: `cd frontend && npm run dev`
+
+Then open `http://localhost:5173` in the browser.
+
+### Supabase database setup
+
+1. Create a project at [supabase.com](https://supabase.com) (free tier is fine).
+2. Open **Project Settings → Database**.
+3. Under **Connection string**, choose **URI** and **Transaction pooler** (port **6543**).
+4. Copy the URI and adapt it for async SQLAlchemy:
+   - Change `postgresql://` to `postgresql+asyncpg://`
+   - Replace `[YOUR-PASSWORD]` with your database password
+   - URL-encode special characters in the password if needed
+
+Example (replace placeholders):
+
+```
+postgresql+asyncpg://postgres.abcdefghijklmnop:[PASSWORD]@aws-0-ap-southeast-1.pooler.supabase.com:6543/postgres
+```
+
+The backend sets `statement_cache_size=0` on asyncpg connections so **Supabase’s transaction pooler (PgBouncer on port 6543)** works. Without that, you may see `DuplicatePreparedStatementError` and HTTP 500 on `/api/watchlists/` and `/api/portfolios/`.
+
+5. Create `backend/.env` (copy from `.env.example` at the repo root):
+
+```
+FINNHUB_API_KEY=your_finnhub_key
+DATABASE_URL=postgresql+asyncpg://postgres.[PROJECT_REF]:[PASSWORD]@aws-0-[REGION].pooler.supabase.com:6543/postgres
+```
 
 ### Backend
 
@@ -71,20 +115,21 @@ venv\Scripts\activate        # Windows
 pip install -r requirements.txt
 ```
 
-Create a `.env` file in the `backend/` folder (see `.env.example` at root):
-
-```
-FINNHUB_API_KEY=your_api_key_here
-```
-
-Run migrations and start the server:
+Apply migrations to your Supabase database (required on first setup):
 
 ```bash
 alembic upgrade head
+```
+
+Start the server:
+
+```bash
 uvicorn app.main:app --reload
 ```
 
 Backend runs at `http://localhost:8000`
+
+Verify database connectivity: `GET http://localhost:8000/api/health` should return `"database": "connected"`.
 
 ### Frontend
 
@@ -115,7 +160,10 @@ Frontend runs at `http://localhost:5173` (proxies `/api` to backend)
 | DELETE | `/api/watchlists/{id}/items/{item_id}` | Remove from watchlist |
 | GET | `/api/portfolios/` | List portfolios |
 | POST | `/api/portfolios/` | Create portfolio |
-| GET | `/api/portfolios/{id}/summary` | Portfolio with live P&L |
+| GET | `/api/portfolios/{id}` | Single portfolio with transactions |
+| GET | `/api/portfolios/{id}/summary` | Holdings and P&L (`?live_prices=true` for Finnhub fetch) |
+| GET | `/api/portfolios/{id}/performance` | Historical value chart data (`?days=365`) |
+| GET | `/api/stocks/quotes?symbols=` | Batch quotes for multiple symbols |
 | DELETE | `/api/portfolios/{id}` | Delete portfolio |
 | POST | `/api/portfolios/{id}/transactions` | Record buy/sell |
 | DELETE | `/api/portfolios/{id}/transactions/{tx_id}` | Delete transaction |
@@ -127,19 +175,25 @@ All settings are in `backend/.env` (see `.env.example`):
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `FINNHUB_API_KEY` | (required) | Finnhub API key |
-| `DATABASE_URL` | `sqlite+aiosqlite:///./stock_platform.db` | Database connection |
+| `DATABASE_URL` | `sqlite+aiosqlite:///./stock_platform.db` | Postgres (Supabase) connection string; set in `backend/.env` |
 | `CORS_ORIGINS` | `http://localhost:5173` | Allowed CORS origins |
 | `TRENDING_SYMBOLS` | `AAPL,MSFT,GOOGL,AMZN,NVDA,TSLA` | Dashboard trending list |
 
 ## Database Migrations
 
+Schema changes are applied **only** through Alembic (not auto-created at app startup).
+
 ```bash
+cd backend
+
 # Create a new migration after model changes
 alembic revision --autogenerate -m "description"
 
-# Apply migrations
+# Apply migrations to Supabase
 alembic upgrade head
 ```
+
+**Note:** Watchlists and portfolios created in an old local SQLite file are not migrated automatically. Point `DATABASE_URL` at Supabase and run `alembic upgrade head` on a fresh database, or export/import data manually if you need to keep old rows.
 
 ## Development
 

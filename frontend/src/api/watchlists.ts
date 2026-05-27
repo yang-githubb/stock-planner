@@ -1,4 +1,4 @@
-import type { Watchlist } from "@/types";
+import type { Watchlist, WatchlistItem } from "@/types";
 import api from "./client";
 
 export async function getWatchlists(): Promise<Watchlist[]> {
@@ -19,8 +19,8 @@ export async function addToWatchlist(
   watchlistId: number,
   symbol: string,
   notes?: string
-): Promise<Watchlist> {
-  const { data } = await api.post<Watchlist>(
+): Promise<WatchlistItem> {
+  const { data } = await api.post<WatchlistItem>(
     `/watchlists/${watchlistId}/items`,
     { symbol, notes }
   );

@@ -19,6 +19,18 @@ export async function getQuote(symbol: string): Promise<StockQuote> {
   return data;
 }
 
+export async function getQuotes(
+  symbols: string[]
+): Promise<Record<string, StockQuote>> {
+  const unique = [...new Set(symbols.map((s) => s.toUpperCase()).filter(Boolean))];
+  if (!unique.length) return {};
+  const { data } = await api.get<{ quotes: Record<string, StockQuote> }>(
+    "/stocks/quotes",
+    { params: { symbols: unique.join(",") } }
+  );
+  return data.quotes;
+}
+
 export async function getCompanyProfile(symbol: string): Promise<CompanyProfile> {
   const { data } = await api.get<CompanyProfile>(`/stocks/${symbol}/profile`);
   return data;
