@@ -6,7 +6,8 @@ from typing import Iterable
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.phase5 import InsiderTransaction, OwnershipSnapshot, JobRun
+from app.models.insider import InsiderTransaction, OwnershipSnapshot
+from app.models.job import JobRun
 from app.models.watchlist import WatchlistItem, Watchlist
 from app.services import finnhub_service
 

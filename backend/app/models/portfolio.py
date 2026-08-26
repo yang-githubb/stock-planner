@@ -13,7 +13,7 @@ class Portfolio(Base):
     __tablename__ = "portfolios"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, nullable=True, index=True)
+    user_id = Column(String, nullable=False, index=True)
     name = Column(String, nullable=False)
     description = Column(String, nullable=True)
     created_at = Column(DateTime, server_default=func.now())

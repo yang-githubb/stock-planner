@@ -1,4 +1,4 @@
-from sqlalchemy import Column, DateTime, Float, Integer, String, Text, func
+from sqlalchemy import Column, DateTime, Float, Integer, String, func
 
 from app.core.database import Base
 
@@ -31,25 +31,3 @@ class OwnershipSnapshot(Base):
     filing_date = Column(DateTime, nullable=True)
     source = Column(String, nullable=False, default="finnhub")
     created_at = Column(DateTime, server_default=func.now())
-
-
-class UserNotification(Base):
-    __tablename__ = "user_notifications"
-
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, nullable=False, index=True)
-    type = Column(String, nullable=False, index=True)
-    payload = Column(Text, nullable=False)
-    created_at = Column(DateTime, server_default=func.now())
-    read_at = Column(DateTime, nullable=True)
-
-
-class JobRun(Base):
-    __tablename__ = "job_runs"
-
-    id = Column(Integer, primary_key=True, index=True)
-    job_name = Column(String, nullable=False, index=True)
-    status = Column(String, nullable=False, index=True)
-    message = Column(Text, nullable=True)
-    started_at = Column(DateTime, server_default=func.now())
-    finished_at = Column(DateTime, nullable=True)
