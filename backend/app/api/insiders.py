@@ -10,7 +10,11 @@ router = APIRouter(prefix="/api/insiders", tags=["insiders"])
 
 
 @router.post("/{symbol}/ingest", status_code=202)
-async def ingest_symbol(symbol: str, db: AsyncSession = Depends(get_db)):
+async def ingest_symbol(
+    symbol: str,
+    db: AsyncSession = Depends(get_db),
+    user: AuthUser = Depends(get_current_user),
+):
     try:
         counts = await insider_service.ingest_symbol(db, symbol.upper())
         return {"ok": True, **counts}

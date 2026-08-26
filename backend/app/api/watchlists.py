@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import AuthUser, get_optional_user
+from app.core.auth import AuthUser, get_current_user
 from app.core.database import get_db
 from app.schemas.watchlist import (
     WatchlistCreate,
@@ -18,27 +18,27 @@ router = APIRouter(prefix="/api/watchlists", tags=["watchlists"])
 @router.get("/", response_model=list[WatchlistResponse])
 async def get_watchlists(
     db: AsyncSession = Depends(get_db),
-    user: AuthUser | None = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),
 ):
-    return await watchlist_service.list_watchlists(db, user.id if user else None)
+    return await watchlist_service.list_watchlists(db, user.id)
 
 
 @router.post("/", response_model=WatchlistResponse, status_code=201)
 async def create_watchlist(
     data: WatchlistCreate,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser | None = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),
 ):
-    return await watchlist_service.create_watchlist(db, data.name, user.id if user else None)
+    return await watchlist_service.create_watchlist(db, data.name, user.id)
 
 
 @router.delete("/{watchlist_id}", status_code=204)
 async def delete_watchlist(
     watchlist_id: int,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser | None = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),
 ):
-    await watchlist_service.delete_watchlist(db, watchlist_id, user.id if user else None)
+    await watchlist_service.delete_watchlist(db, watchlist_id, user.id)
 
 
 @router.post(
@@ -50,10 +50,10 @@ async def add_item(
     watchlist_id: int,
     data: WatchlistItemCreate,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser | None = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),
 ):
     return await watchlist_service.add_item(
-        db, watchlist_id, data.symbol, data.notes, user.id if user else None
+        db, watchlist_id, data.symbol, data.notes, user.id
     )
 
 
@@ -66,10 +66,10 @@ async def update_item(
     item_id: int,
     data: WatchlistItemUpdate,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser | None = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),
 ):
     return await watchlist_service.update_item_notes(
-        db, watchlist_id, item_id, data.notes, user.id if user else None
+        db, watchlist_id, item_id, data.notes, user.id
     )
 
 
@@ -78,6 +78,6 @@ async def remove_item(
     watchlist_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser | None = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),
 ):
-    await watchlist_service.remove_item(db, watchlist_id, item_id, user.id if user else None)
+    await watchlist_service.remove_item(db, watchlist_id, item_id, user.id)
