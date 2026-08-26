@@ -4,6 +4,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Navbar } from "./Navbar";
 import { ChatDrawer } from "@/components/chat/ChatDrawer";
 import { NotificationToasts } from "@/components/notifications/NotificationToasts";
+import { ErrorToasts } from "@/components/ui/ErrorToasts";
 import { useAuth } from "@/context/AuthContext";
 
 export function Layout() {
@@ -25,6 +26,7 @@ export function Layout() {
       </main>
       <ChatDrawer />
       <NotificationToasts />
+      <ErrorToasts />
     </div>
   );
 }

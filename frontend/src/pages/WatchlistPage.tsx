@@ -9,6 +9,7 @@ import type { WatchlistItem } from "@/types";
 import { SymbolSearch } from "@/components/stocks/SymbolSearch";
 import { PageSpinner } from "@/components/ui/Spinner";
 import { EmptyState } from "@/components/ui/EmptyState";
+import { useAuth } from "@/context/AuthContext";
 import {
   useWatchlists,
   useCreateWatchlist,
@@ -112,6 +113,7 @@ function WatchlistItemRows({
 }
 
 export default function WatchlistPage() {
+  const { user, loading: authLoading } = useAuth();
   const { data: watchlists, isLoading } = useWatchlists();
   const createWatchlist = useCreateWatchlist();
   const deleteWatchlist = useDeleteWatchlist();
@@ -139,7 +141,17 @@ export default function WatchlistPage() {
     }
   }
 
-  if (isLoading) return <PageSpinner />;
+  if (authLoading || isLoading) return <PageSpinner />;
+
+  if (!user) {
+    return (
+      <EmptyState
+        icon={<Star size={48} />}
+        title="Sign in to use watchlists"
+        description="Watchlists are private to your account. Sign in from the navbar to create one."
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,8 @@
 {
   "compilerOptions": {
     "jsx": "react-jsx",
+    "skipLibCheck": true,
+    "noEmit": true,
     "paths": {
       "@/*": ["./src/*"]
     }

@@ -7,13 +7,17 @@ import {
   updateItemNotes,
   removeFromWatchlist,
 } from "@/api/watchlists";
+import { useAuth } from "@/context/AuthContext";
 import type { Watchlist, WatchlistItem } from "@/types";
 
 export function useWatchlists() {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ["watchlists"],
     queryFn: getWatchlists,
     staleTime: 30_000,
+    // Watchlists are per-user; don't fire unauthenticated requests
+    enabled: !!user,
   });
 }
 
