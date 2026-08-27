@@ -36,26 +36,31 @@ def get_demo_user_id(supabase_url: str, anon_key: str, email: str, password: str
     auth = supabase_url.rstrip("/") + "/auth/v1"
     creds = {"email": email, "password": password}
 
-    resp = httpx.post(f"{auth}/signup", headers=headers, json=creds, timeout=20)
-    if resp.status_code == 200:
-        body = resp.json()
+    signup = httpx.post(f"{auth}/signup", headers=headers, json=creds, timeout=20)
+    if signup.status_code == 200:
+        body = signup.json()
         user = body.get("user") or body
-        if user.get("id"):
+        if user.get("id") and (user.get("identities") or body.get("access_token")):
             print(f"Created Supabase user {email}")
             return user["id"]
 
-    resp = httpx.post(
+    signin = httpx.post(
         f"{auth}/token", params={"grant_type": "password"}, headers=headers, json=creds, timeout=20
     )
-    if resp.status_code == 200:
+    if signin.status_code == 200:
         print(f"Signed in existing Supabase user {email}")
-        return resp.json()["user"]["id"]
+        return signin.json()["user"]["id"]
 
     raise SystemExit(
-        f"Could not create or sign in {email} (HTTP {resp.status_code}): {resp.text}\n"
-        "If email confirmation is enabled, confirm the account in the Supabase "
-        "dashboard (Authentication -> Users) and re-run, or disable 'Confirm email' "
-        "for this project."
+        f"Could not create or sign in {email}.\n"
+        f"  signup  -> HTTP {signup.status_code}: {signup.text[:300]}\n"
+        f"  sign-in -> HTTP {signin.status_code}: {signin.text[:300]}\n"
+        "Likely causes:\n"
+        "  - The account already exists with a different password: delete it in the "
+        "Supabase dashboard (Authentication -> Users) and re-run.\n"
+        "  - Email confirmation is enabled: confirm the user in the dashboard and "
+        "re-run, or disable 'Confirm email' under Authentication -> Providers -> Email.\n"
+        "  - Email signups are disabled: enable the Email provider in the dashboard."
     )
 
 
