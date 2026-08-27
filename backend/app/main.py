@@ -10,16 +10,6 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.jobs import start_jobs, stop_jobs
 from app.core.realtime import realtime_manager
-from app.models import (
-    Watchlist,
-    WatchlistItem,
-    Portfolio,
-    Transaction,
-    InsiderTransaction,
-    OwnershipSnapshot,
-    UserNotification,
-    JobRun,
-)  # noqa: F401
 from app.api import stocks, watchlists, portfolios, insiders, chat
 
 

@@ -1,14 +1,19 @@
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 from typing import Any
 
 import httpx
 from fastapi import Depends, Header, HTTPException, status
-from jose import jwk, jwt
-from jose.utils import base64url_decode
+from jose import JWTError, jwt
 
 from app.core.config import settings
+
+# Supabase signs access tokens with RS256 (legacy JWT secret projects use HS256,
+# which JWKS-based verification does not cover); ES256 covers newer key types.
+_ALLOWED_ALGORITHMS = ["RS256", "ES256"]
+_JWKS_TTL_SECONDS = 15 * 60
 
 
 @dataclass
@@ -18,22 +23,38 @@ class AuthUser:
 
 
 _jwks_cache: dict[str, Any] | None = None
+_jwks_fetched_at: float = 0.0
 
 
-async def _load_jwks() -> dict[str, Any]:
-    global _jwks_cache
-    if _jwks_cache is not None:
-        return _jwks_cache
+async def _fetch_jwks() -> dict[str, Any]:
+    global _jwks_cache, _jwks_fetched_at
     if not settings.SUPABASE_JWKS_URL:
+        # Misconfiguration must fail loudly: silently treating requests as
+        # anonymous would disable auth for the whole deployment.
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="SUPABASE_JWKS_URL is not configured",
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Authentication is not configured (SUPABASE_JWKS_URL is unset)",
         )
     async with httpx.AsyncClient(timeout=10) as client:
         resp = await client.get(settings.SUPABASE_JWKS_URL)
         resp.raise_for_status()
         _jwks_cache = resp.json()
+        _jwks_fetched_at = time.monotonic()
         return _jwks_cache
+
+
+async def _get_signing_key(kid: str | None) -> dict[str, Any]:
+    jwks = _jwks_cache
+    if jwks is None or time.monotonic() - _jwks_fetched_at > _JWKS_TTL_SECONDS:
+        jwks = await _fetch_jwks()
+    key = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
+    if key is None:
+        # Unknown kid may mean Supabase rotated its keys; refetch once.
+        jwks = await _fetch_jwks()
+        key = next((k for k in jwks.get("keys", []) if k.get("kid") == kid), None)
+    if key is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token key")
+    return key
 
 
 def _get_bearer_token(authorization: str | None) -> str | None:
@@ -45,21 +66,25 @@ def _get_bearer_token(authorization: str | None) -> str | None:
 
 
 async def _verify_token(token: str) -> AuthUser:
-    unverified_header = jwt.get_unverified_header(token)
-    jwks = await _load_jwks()
-    key_data = next((k for k in jwks.get("keys", []) if k.get("kid") == unverified_header.get("kid")), None)
-    if not key_data:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token key")
+    try:
+        header = jwt.get_unverified_header(token)
+    except JWTError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
 
-    public_key = jwk.construct(key_data)
-    message, encoded_sig = token.rsplit(".", 1)
-    decoded_sig = base64url_decode(encoded_sig.encode("utf-8"))
-    if not public_key.verify(message.encode("utf-8"), decoded_sig):
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token signature")
+    key = await _get_signing_key(header.get("kid"))
+    try:
+        claims = jwt.decode(
+            token,
+            key,
+            algorithms=_ALLOWED_ALGORITHMS,
+            issuer=settings.SUPABASE_JWT_ISSUER or None,
+            options={"verify_aud": False},
+        )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token"
+        )
 
-    claims = jwt.get_unverified_claims(token)
-    if settings.SUPABASE_JWT_ISSUER and claims.get("iss") != settings.SUPABASE_JWT_ISSUER:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token issuer")
     user_id = claims.get("sub")
     if not user_id:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
@@ -73,16 +98,18 @@ async def get_current_user(authorization: str | None = Header(default=None)) -> 
     return await _verify_token(token)
 
 
-async def get_optional_user(
-    authorization: str | None = Header(default=None),
-) -> AuthUser | None:
-    token = _get_bearer_token(authorization)
-    if not token:
-        return None
-    try:
-        return await _verify_token(token)
-    except HTTPException:
-        return None
+async def get_writable_user(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    """Like get_current_user, but rejects the shared read-only demo account."""
+    if (
+        settings.DEMO_USER_EMAIL
+        and user.email
+        and user.email.lower() == settings.DEMO_USER_EMAIL.lower()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The demo account is read-only. Sign up for your own account to make changes.",
+        )
+    return user
 
 
 async def verify_access_token(token: str) -> AuthUser:

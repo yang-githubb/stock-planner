@@ -1,25 +1,22 @@
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.models.watchlist import Watchlist, WatchlistItem
 
 
-def _watchlist_scope_query(user_id: str | None):
-    q = select(Watchlist).options(selectinload(Watchlist.items))
-    if user_id:
-        # Include legacy rows created before auth (user_id was NULL)
-        q = q.where(or_(Watchlist.user_id == user_id, Watchlist.user_id.is_(None)))
-    return q
-
-
-async def list_watchlists(db: AsyncSession, user_id: str | None = None) -> list[Watchlist]:
-    result = await db.execute(_watchlist_scope_query(user_id))
+async def list_watchlists(db: AsyncSession, user_id: str) -> list[Watchlist]:
+    q = (
+        select(Watchlist)
+        .options(selectinload(Watchlist.items))
+        .where(Watchlist.user_id == user_id)
+    )
+    result = await db.execute(q)
     return list(result.scalars().all())
 
 
-async def create_watchlist(db: AsyncSession, name: str, user_id: str | None = None) -> Watchlist:
+async def create_watchlist(db: AsyncSession, name: str, user_id: str) -> Watchlist:
     watchlist = Watchlist(name=name, user_id=user_id)
     db.add(watchlist)
     await db.commit()
@@ -27,10 +24,10 @@ async def create_watchlist(db: AsyncSession, name: str, user_id: str | None = No
     return watchlist
 
 
-async def delete_watchlist(db: AsyncSession, watchlist_id: int, user_id: str | None = None) -> None:
-    q = select(Watchlist).where(Watchlist.id == watchlist_id)
-    if user_id:
-        q = q.where(Watchlist.user_id == user_id)
+async def delete_watchlist(db: AsyncSession, watchlist_id: int, user_id: str) -> None:
+    q = select(Watchlist).where(
+        Watchlist.id == watchlist_id, Watchlist.user_id == user_id
+    )
     result = await db.execute(q)
     watchlist = result.scalar_one_or_none()
     if not watchlist:
@@ -43,12 +40,12 @@ async def add_item(
     db: AsyncSession,
     watchlist_id: int,
     symbol: str,
-    notes: str | None = None,
-    user_id: str | None = None,
+    notes: str | None,
+    user_id: str,
 ) -> WatchlistItem:
-    q = select(Watchlist.id).where(Watchlist.id == watchlist_id)
-    if user_id:
-        q = q.where(Watchlist.user_id == user_id)
+    q = select(Watchlist.id).where(
+        Watchlist.id == watchlist_id, Watchlist.user_id == user_id
+    )
     result = await db.execute(q)
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Watchlist not found")
@@ -75,20 +72,22 @@ async def add_item(
     return item
 
 
-async def remove_item(
-    db: AsyncSession, watchlist_id: int, item_id: int, user_id: str | None = None
-) -> None:
-    q = (
+def _owned_item_query(watchlist_id: int, item_id: int, user_id: str):
+    return (
         select(WatchlistItem)
         .join(Watchlist, Watchlist.id == WatchlistItem.watchlist_id)
         .where(
             WatchlistItem.id == item_id,
             WatchlistItem.watchlist_id == watchlist_id,
+            Watchlist.user_id == user_id,
         )
     )
-    if user_id:
-        q = q.where(Watchlist.user_id == user_id)
-    result = await db.execute(q)
+
+
+async def remove_item(
+    db: AsyncSession, watchlist_id: int, item_id: int, user_id: str
+) -> None:
+    result = await db.execute(_owned_item_query(watchlist_id, item_id, user_id))
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -101,19 +100,9 @@ async def update_item_notes(
     watchlist_id: int,
     item_id: int,
     notes: str | None,
-    user_id: str | None = None,
+    user_id: str,
 ) -> Watchlist:
-    q = (
-        select(WatchlistItem)
-        .join(Watchlist, Watchlist.id == WatchlistItem.watchlist_id)
-        .where(
-            WatchlistItem.id == item_id,
-            WatchlistItem.watchlist_id == watchlist_id,
-        )
-    )
-    if user_id:
-        q = q.where(Watchlist.user_id == user_id)
-    result = await db.execute(q)
+    result = await db.execute(_owned_item_query(watchlist_id, item_id, user_id))
     item = result.scalar_one_or_none()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -124,9 +113,7 @@ async def update_item_notes(
     wl_query = (
         select(Watchlist)
         .options(selectinload(Watchlist.items))
-        .where(Watchlist.id == watchlist_id)
+        .where(Watchlist.id == watchlist_id, Watchlist.user_id == user_id)
     )
-    if user_id:
-        wl_query = wl_query.where(Watchlist.user_id == user_id)
     wl_result = await db.execute(wl_query)
     return wl_result.scalar_one()

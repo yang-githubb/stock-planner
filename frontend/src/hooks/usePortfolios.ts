@@ -13,6 +13,7 @@ import {
 import { applyTransactionToSummary } from "@/lib/portfolioOptimistic";
 import { mergeQuotesIntoSummary } from "@/lib/portfolioLive";
 import { useQuotes } from "@/hooks/useStocks";
+import { useAuth } from "@/context/AuthContext";
 import type { Portfolio, PortfolioSummary } from "@/types";
 
 const summaryKey = (id: number) => ["portfolioSummary", id] as const;
@@ -33,9 +34,12 @@ function refreshLiveQuotes(
 }
 
 export function usePortfolios() {
+  const { user } = useAuth();
   return useQuery({
     queryKey: ["portfolios"],
     queryFn: getPortfolios,
+    // Portfolios are per-user; don't fire unauthenticated requests
+    enabled: !!user,
   });
 }
 

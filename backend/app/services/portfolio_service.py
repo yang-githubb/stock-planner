@@ -3,7 +3,7 @@ from collections import defaultdict
 from datetime import date, datetime, timedelta, time as dt_time
 
 from fastapi import HTTPException
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -11,22 +11,22 @@ from app.models.portfolio import Portfolio, Transaction, TransactionType
 from app.services import finnhub_service
 
 
-async def list_portfolios(db: AsyncSession, user_id: str | None = None) -> list[Portfolio]:
-    q = select(Portfolio).options(selectinload(Portfolio.transactions))
-    if user_id:
-        q = q.where(or_(Portfolio.user_id == user_id, Portfolio.user_id.is_(None)))
+async def list_portfolios(db: AsyncSession, user_id: str) -> list[Portfolio]:
+    q = (
+        select(Portfolio)
+        .options(selectinload(Portfolio.transactions))
+        .where(Portfolio.user_id == user_id)
+    )
     result = await db.execute(q)
     return list(result.scalars().all())
 
 
-async def get_portfolio(db: AsyncSession, portfolio_id: int, user_id: str | None = None) -> Portfolio:
+async def get_portfolio(db: AsyncSession, portfolio_id: int, user_id: str) -> Portfolio:
     q = (
         select(Portfolio)
         .options(selectinload(Portfolio.transactions))
-        .where(Portfolio.id == portfolio_id)
+        .where(Portfolio.id == portfolio_id, Portfolio.user_id == user_id)
     )
-    if user_id:
-        q = q.where(or_(Portfolio.user_id == user_id, Portfolio.user_id.is_(None)))
     result = await db.execute(q)
     portfolio = result.scalar_one_or_none()
     if not portfolio:
@@ -35,7 +35,7 @@ async def get_portfolio(db: AsyncSession, portfolio_id: int, user_id: str | None
 
 
 async def create_portfolio(
-    db: AsyncSession, name: str, description: str | None = None, user_id: str | None = None
+    db: AsyncSession, name: str, description: str | None, user_id: str
 ) -> Portfolio:
     portfolio = Portfolio(name=name, description=description, user_id=user_id)
     db.add(portfolio)
@@ -44,7 +44,7 @@ async def create_portfolio(
     return portfolio
 
 
-async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: str | None = None) -> None:
+async def delete_portfolio(db: AsyncSession, portfolio_id: int, user_id: str) -> None:
     portfolio = await get_portfolio(db, portfolio_id, user_id)
     await db.delete(portfolio)
     await db.commit()
@@ -58,12 +58,12 @@ async def add_transaction(
     shares: float,
     price_per_share: float,
     date,
-    notes: str | None = None,
-    user_id: str | None = None,
+    notes: str | None,
+    user_id: str,
 ) -> Transaction:
-    q = select(Portfolio.id).where(Portfolio.id == portfolio_id)
-    if user_id:
-        q = q.where(or_(Portfolio.user_id == user_id, Portfolio.user_id.is_(None)))
+    q = select(Portfolio.id).where(
+        Portfolio.id == portfolio_id, Portfolio.user_id == user_id
+    )
     exists = await db.execute(q)
     if exists.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Portfolio not found")
@@ -108,7 +108,7 @@ async def delete_transaction(
     db: AsyncSession,
     portfolio_id: int,
     transaction_id: int,
-    user_id: str | None = None,
+    user_id: str,
 ) -> None:
     q = (
         select(Transaction)
@@ -116,10 +116,9 @@ async def delete_transaction(
         .where(
             Transaction.id == transaction_id,
             Transaction.portfolio_id == portfolio_id,
+            Portfolio.user_id == user_id,
         )
     )
-    if user_id:
-        q = q.where(or_(Portfolio.user_id == user_id, Portfolio.user_id.is_(None)))
     result = await db.execute(q)
     transaction = result.scalar_one_or_none()
     if not transaction:
@@ -179,7 +178,7 @@ def _price_on_day(series: dict[date, float], day: date) -> float | None:
 
 
 async def get_portfolio_performance(
-    db: AsyncSession, portfolio_id: int, days: int = 365, user_id: str | None = None
+    db: AsyncSession, portfolio_id: int, days: int, user_id: str
 ) -> dict:
     """Reconstruct daily portfolio value from transactions + historical closes."""
     portfolio = await get_portfolio(db, portfolio_id, user_id)
@@ -239,7 +238,7 @@ async def get_portfolio_summary(
     portfolio_id: int,
     *,
     live_prices: bool = False,
-    user_id: str | None = None,
+    user_id: str,
 ) -> dict:
     portfolio = await get_portfolio(db, portfolio_id, user_id)
     all_holdings = _compute_holdings(portfolio.transactions)

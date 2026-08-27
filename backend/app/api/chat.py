@@ -1,7 +1,7 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import AuthUser, get_optional_user
+from app.core.auth import AuthUser, get_current_user
 from app.core.database import get_db
 from app.schemas.chat import ChatRequest, ChatResponse
 from app.services import chat_service
@@ -13,13 +13,13 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 async def chat(
     payload: ChatRequest,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser | None = Depends(get_optional_user),
+    user: AuthUser = Depends(get_current_user),
 ):
     try:
         answer = await chat_service.chat_with_tools(
             db=db,
             messages=[m.model_dump() for m in payload.messages],
-            user_id=user.id if user else None,
+            user_id=user.id,
         )
         return ChatResponse(answer=answer)
     except Exception as exc:

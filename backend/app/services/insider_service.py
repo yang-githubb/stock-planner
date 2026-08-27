@@ -3,10 +3,11 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Iterable
 
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.phase5 import InsiderTransaction, OwnershipSnapshot, JobRun
+from app.models.insider import InsiderTransaction, OwnershipSnapshot
+from app.models.job import JobRun
 from app.models.watchlist import WatchlistItem, Watchlist
 from app.services import finnhub_service
 
@@ -140,6 +141,43 @@ async def fetch_ownership_snapshots(symbol: str, days: int = 365) -> list[dict]:
     return result
 
 
+def _ownership_fingerprint(row: dict) -> tuple:
+    return (
+        row["symbol"],
+        (row.get("investor_name") or "").strip().upper(),
+        _date_key(row.get("report_date")),
+        _date_key(row.get("filing_date")),
+        None if row.get("share") is None else round(float(row["share"]), 4),
+        None if row.get("change") is None else round(float(row["change"]), 4),
+    )
+
+
+async def _existing_ownership_fingerprints(db: AsyncSession, symbol: str) -> set[tuple]:
+    result = await db.execute(
+        select(
+            OwnershipSnapshot.investor_name,
+            OwnershipSnapshot.report_date,
+            OwnershipSnapshot.filing_date,
+            OwnershipSnapshot.share,
+            OwnershipSnapshot.change,
+        ).where(OwnershipSnapshot.symbol == symbol.upper())
+    )
+    sym = symbol.upper()
+    return {
+        _ownership_fingerprint(
+            {
+                "symbol": sym,
+                "investor_name": name,
+                "report_date": rd,
+                "filing_date": fd,
+                "share": share,
+                "change": change,
+            }
+        )
+        for name, rd, fd, share, change in result.all()
+    }
+
+
 async def ingest_symbol(db: AsyncSession, symbol: str) -> dict[str, int]:
     insiders = await fetch_insider_transactions(symbol)
     # Ownership endpoints can be access-limited on the Finnhub free tier.
@@ -160,8 +198,13 @@ async def ingest_symbol(db: AsyncSession, symbol: str) -> dict[str, int]:
         db.add(InsiderTransaction(**row))
         inserted_insiders += 1
 
+    existing_ownership = await _existing_ownership_fingerprints(db, symbol.upper())
     inserted_ownership = 0
     for row in ownership:
+        fp = _ownership_fingerprint(row)
+        if fp in existing_ownership:
+            continue
+        existing_ownership.add(fp)
         db.add(OwnershipSnapshot(**row))
         inserted_ownership += 1
 
@@ -207,7 +250,7 @@ async def watchlist_symbols_for_user(db: AsyncSession, user_id: str) -> list[str
     q = (
         select(WatchlistItem.symbol)
         .join(Watchlist, Watchlist.id == WatchlistItem.watchlist_id)
-        .where(or_(Watchlist.user_id == user_id, Watchlist.user_id.is_(None)))
+        .where(Watchlist.user_id == user_id)
     )
     rows = await db.execute(q)
     return sorted({s.upper() for s in rows.scalars().all()})
