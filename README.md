@@ -1,6 +1,16 @@
 # StockPlanner
 
+[![CI](https://github.com/yang-githubb/stock-planner/actions/workflows/ci.yml/badge.svg)](https://github.com/yang-githubb/stock-planner/actions/workflows/ci.yml)
+[![Demo](https://img.shields.io/badge/demo-live-6366f1)](https://yang-githubb.github.io/stock-planner/)
+
 A modern stock research and portfolio tracking platform.
+
+**[▶ Try the live demo](https://yang-githubb.github.io/stock-planner/)** — a
+static build of the real UI with simulated market data (no sign-up, no API
+keys). Explore the dashboard, stock charts with indicators, the compare view,
+and insider tables. Sign-in and live data require running the app yourself
+(see below). The demo is rebuilt automatically on every push by
+[`deploy-demo.yml`](.github/workflows/deploy-demo.yml).
 
 ## Features
 

@@ -20,7 +20,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 import httpx
 
@@ -90,7 +90,7 @@ async def seed(user_id: str) -> None:
         db.add(portfolio)
         await db.flush()
 
-        today = datetime.utcnow()
+        today = datetime.now(UTC).replace(tzinfo=None)
         buys = [
             ("AAPL", 20, 168.40, 340), ("AAPL", 10, 189.20, 200),
             ("MSFT", 12, 402.75, 320), ("NVDA", 25, 94.60, 300),
