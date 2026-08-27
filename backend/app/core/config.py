@@ -11,6 +11,7 @@ class Settings(BaseSettings):
     OPENAI_MODEL: str = "gpt-4.1-mini"
     SUPABASE_JWKS_URL: str = ""
     SUPABASE_JWT_ISSUER: str = ""
+    DEMO_USER_EMAIL: str = ""
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     TRENDING_SYMBOLS: list[str] = ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA"]
     JOBS_ENABLED: bool = True

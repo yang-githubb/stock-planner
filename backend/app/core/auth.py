@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Any
 
 import httpx
-from fastapi import Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, status
 from jose import JWTError, jwt
 
 from app.core.config import settings
@@ -96,6 +96,20 @@ async def get_current_user(authorization: str | None = Header(default=None)) -> 
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing bearer token")
     return await _verify_token(token)
+
+
+async def get_writable_user(user: AuthUser = Depends(get_current_user)) -> AuthUser:
+    """Like get_current_user, but rejects the shared read-only demo account."""
+    if (
+        settings.DEMO_USER_EMAIL
+        and user.email
+        and user.email.lower() == settings.DEMO_USER_EMAIL.lower()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The demo account is read-only. Sign up for your own account to make changes.",
+        )
+    return user
 
 
 async def verify_access_token(token: str) -> AuthUser:

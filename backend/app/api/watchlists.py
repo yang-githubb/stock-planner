@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import AuthUser, get_current_user
+from app.core.auth import AuthUser, get_current_user, get_writable_user
 from app.core.database import get_db
 from app.schemas.watchlist import (
     WatchlistCreate,
@@ -27,7 +27,7 @@ async def get_watchlists(
 async def create_watchlist(
     data: WatchlistCreate,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     return await watchlist_service.create_watchlist(db, data.name, user.id)
 
@@ -36,7 +36,7 @@ async def create_watchlist(
 async def delete_watchlist(
     watchlist_id: int,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     await watchlist_service.delete_watchlist(db, watchlist_id, user.id)
 
@@ -50,7 +50,7 @@ async def add_item(
     watchlist_id: int,
     data: WatchlistItemCreate,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     return await watchlist_service.add_item(
         db, watchlist_id, data.symbol, data.notes, user.id
@@ -66,7 +66,7 @@ async def update_item(
     item_id: int,
     data: WatchlistItemUpdate,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     return await watchlist_service.update_item_notes(
         db, watchlist_id, item_id, data.notes, user.id
@@ -78,6 +78,6 @@ async def remove_item(
     watchlist_id: int,
     item_id: int,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     await watchlist_service.remove_item(db, watchlist_id, item_id, user.id)

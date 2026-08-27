@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.auth import AuthUser, get_current_user
+from app.core.auth import AuthUser, get_current_user, get_writable_user
 from app.core.database import get_db
 from app.schemas.portfolio import (
     PortfolioCreate,
@@ -61,7 +61,7 @@ async def get_portfolio_summary(
 async def create_portfolio(
     data: PortfolioCreate,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     return await portfolio_service.create_portfolio(
         db, data.name, data.description, user.id
@@ -72,7 +72,7 @@ async def create_portfolio(
 async def delete_portfolio(
     portfolio_id: int,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     await portfolio_service.delete_portfolio(db, portfolio_id, user.id)
 
@@ -86,7 +86,7 @@ async def add_transaction(
     portfolio_id: int,
     data: TransactionCreate,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     tx = await portfolio_service.add_transaction(
         db,
@@ -117,7 +117,7 @@ async def delete_transaction(
     portfolio_id: int,
     transaction_id: int,
     db: AsyncSession = Depends(get_db),
-    user: AuthUser = Depends(get_current_user),
+    user: AuthUser = Depends(get_writable_user),
 ):
     await portfolio_service.delete_transaction(
         db, portfolio_id, transaction_id, user.id

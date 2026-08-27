@@ -242,6 +242,24 @@ GitHub Actions runs the backend lint + tests and a type-checked frontend
 build on every push and pull request (`.github/workflows/ci.yml`).
 Optional local hooks: `pip install pre-commit && pre-commit install`.
 
+## Demo account (optional)
+
+For a public deployment, seed a shared read-only account so visitors can see
+real data without signing up:
+
+```bash
+cd backend
+python scripts/seed_demo_account.py \
+  --supabase-url https://<PROJECT_REF>.supabase.co \
+  --anon-key <publishable anon key> \
+  --email demo@example.com --password <password>
+```
+
+Then set `DEMO_USER_EMAIL=<email>` in `backend/.env` (the API returns 403 for
+any write from that account) and `VITE_DEMO_EMAIL=<email>` in `frontend/.env`
+(the UI shows a read-only banner). Signing in with the demo credentials shows
+the seeded watchlist and portfolio.
+
 ## Architecture notes & known trade-offs
 
 This app is designed to run as a **single backend process**. Three pieces of
